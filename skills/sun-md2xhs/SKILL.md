@@ -69,7 +69,12 @@ bun md2xhs.ts article.md --chrome /usr/bin/chromium
 
 ## 依赖检查
 
-自动安装 `playwright-core`。首次运行时会提示安装。
+首次使用前需安装依赖：
+
+```bash
+cd ~/.claude/skills/sun-md2xhs/scripts
+bun install
+```
 
 需要系统安装 Chrome/Chromium：
 - macOS: [下载 Chrome](https://www.google.com/chrome/)
