@@ -21,6 +21,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, basename, extname } from "node:path";
 import { spawnSync } from "node:child_process";
 import { platform, homedir } from "node:os";
+import { createInterface } from "node:readline";
+import { Buffer } from "node:buffer";
 
 // ─── CLI args (must be first so they're available everywhere) ──────────────
 
@@ -29,6 +31,16 @@ const argv = process.argv.slice(2);
 function getArg(flag: string, fallback: string): string {
   const i = argv.indexOf(flag);
   return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
+}
+
+async function askQuestion(query: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(query, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
 
 // ─── Config file ───────────────────────────────────────────────────────────
@@ -52,22 +64,69 @@ function saveConfig(cfg: Config): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
 }
 
+// ─── Avatar helpers ────────────────────────────────────────────────────────
+
+async function downloadImage(url: string): Promise<Buffer> {
+  const { default: fetch } = await import("node-fetch");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to download: ${res.status}`);
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+function generateDefaultAvatar(name: string): Buffer {
+  // Generate a simple avatar PNG with initials
+  const initials = name.slice(0, 2).toUpperCase();
+  // Use a simple SVG → PNG approach via embedded data
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+    <rect width="200" height="200" fill="#ff6b6b" rx="100"/>
+    <text x="100" y="115" font-family="Arial,sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">${initials}</text>
+  </svg>`;
+  const b64 = Buffer.from(svg).toString("base64");
+  // Return SVG directly (browser can render it as data URI)
+  return Buffer.from(`data:image/svg+xml;base64,${b64}`);
+}
+
+function isUrl(str: string): boolean {
+  return str.startsWith("http://") || str.startsWith("https://");
+}
+
 // ── --init mode ────────────────────────────────────────────────────────────
 if (argv.includes("--init")) {
-  const name = getArg("--name", "");
-  const avatar = getArg("--avatar", "");
-  if (!name || !avatar) {
-    console.error("Usage: bun md2xhs.ts --init --name \"你的名字\" --avatar /path/to/avatar.jpg");
+  let name = getArg("--name", "");
+  let avatar = getArg("--avatar", "");
+
+  // Interactive prompts if arguments missing
+  if (!name) {
+    name = await askQuestion("请输入显示名称: ");
+  }
+  if (!avatar) {
+    avatar = await askQuestion("请输入头像图片路径（或输入 'default' 生成默认头像）: ");
+  }
+
+  if (!name) {
+    console.error("Error: name is required.");
     process.exit(1);
   }
-  if (!existsSync(resolve(avatar))) {
+
+  // Handle avatar: URL, file path, or "default" to generate
+  let avatarValue: string;
+  if (avatar === "default" || !avatar) {
+    // Generate default avatar based on name
+    avatarValue = "default:" + name;
+  } else if (isUrl(avatar)) {
+    avatarValue = avatar; // Store URL
+  } else if (existsSync(resolve(avatar))) {
+    avatarValue = resolve(avatar);
+  } else {
     console.error(`Error: avatar file not found: ${avatar}`);
     process.exit(1);
   }
-  saveConfig({ name, avatar: resolve(avatar) });
-  console.log(`✓ Config saved to ${CONFIG_PATH}`);
+
+  saveConfig({ name, avatar: avatarValue });
+  console.log(`\n✓ Config saved to ${CONFIG_PATH}`);
   console.log(`  name:   ${name}`);
-  console.log(`  avatar: ${resolve(avatar)}`);
+  console.log(`  avatar: ${avatarValue}`);
   process.exit(0);
 }
 
@@ -187,16 +246,58 @@ if (!inputFile) {
 
 const inputPath = resolve(inputFile);
 const outDir = resolve(getArg("--out", "./output"));
-const avatarPath = getArg("--avatar", config.avatar || "");
-const displayName = getArg("--name", config.name || "");
+let avatarPath = getArg("--avatar", config.avatar || "");
+let displayName = getArg("--name", config.name || "");
 
-if (!displayName) {
-  console.error("Error: --name is required (or run --init to save it once).");
+// For non-interactive/agent mode: require explicit args if config missing
+if (!displayName || !avatarPath) {
+  // In script mode (not --init), if name/avatar not provided and no config, show clear error
+  if (!displayName) {
+    console.error("\nError: --name is required (or run --init to save config).");
+    console.error("Example: bun md2xhs.ts article.md --name \"Your Name\" --avatar /path/to/avatar.jpg");
+    process.exit(1);
+  }
+  if (!avatarPath) {
+    console.error("\nError: --avatar is required (or run --init to save config).");
+    console.error("Example: bun md2xhs.ts article.md --name \"Your Name\" --avatar /path/to/avatar.jpg");
+    console.error("Tip: Use --avatar default to generate a default avatar from your name.");
+    process.exit(1);
+  }
+}
+
+// Resolve avatar path (support URL, "default", or "default:name" for generated avatars)
+let avatarDataUrl = "";
+if (avatarPath === "default") {
+  const initials = displayName.slice(0, 2).toUpperCase();
+  avatarDataUrl = `data:image/svg+xml;base64,${Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+      <rect width="200" height="200" fill="#ff6b6b" rx="100"/>
+      <text x="100" y="115" font-family="Arial,sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">${initials}</text>
+    </svg>`
+  ).toString("base64")}`;
+} else if (isUrl(avatarPath)) {
+  console.log(`Downloading avatar from: ${avatarPath}`);
+  try {
+    const imgBuffer = await downloadImage(avatarPath);
+    // Detect mime type from URL extension
+    const urlExt = extname(avatarPath).slice(1).toLowerCase() || "png";
+    const mime = urlExt === "jpg" || urlExt === "jpeg" ? "image/jpeg" : `image/${urlExt}`;
+    avatarDataUrl = `data:${mime};base64,${imgBuffer.toString("base64")}`;
+  } catch (e) {
+    console.error(`Failed to download avatar: ${e}`);
+    process.exit(1);
+  }
+} else if (existsSync(resolve(avatarPath))) {
+  avatarDataUrl = avatarToBase64(resolve(avatarPath));
+} else {
+  console.error(`Error: avatar file not found: ${avatarPath}`);
   process.exit(1);
 }
-if (!avatarPath) {
-  console.error("Error: --avatar is required (or run --init to save it once).");
-  process.exit(1);
+
+// Save config if first time (for reusability)
+if (!config.name && !config.avatar) {
+  saveConfig({ name: displayName, avatar: avatarPath });
+  console.log(`✓ Config saved to ${CONFIG_PATH}`);
 }
 
 const cardWidth = parseInt(getArg("--width", "1080"), 10);
@@ -282,8 +383,6 @@ function avatarToBase64(path: string): string {
   }
 }
 
-const avatarDataUrl = avatarToBase64(avatarPath);
-
 // ─── Block → inner HTML ────────────────────────────────────────────────────
 
 const CARD_PAD = 48;  // horizontal & top padding
@@ -317,7 +416,7 @@ function cardCss(fixedHeight?: number, isLastPage?: boolean): string {
   body {
     width: ${cardWidth}px;
     background: #ffffff;
-    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-family: "Noto Sans CJK SC", "Noto Sans CJK TC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     color: #1a1a1a;
   }
   .card {
