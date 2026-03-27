@@ -86,6 +86,15 @@ function getChromeInstallHelp(): string {
   }
 }
 
+// ─── CLI args ──────────────────────────────────────────────────────────────
+
+const argv = process.argv.slice(2);
+
+function getArg(flag: string, fallback: string): string {
+  const i = argv.indexOf(flag);
+  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
+}
+
 // ─── Chrome executable ─────────────────────────────────────────────────────
 
 const chromePath = detectChrome(argv.includes("--chrome") ? getArg("--chrome", "") : undefined);
@@ -147,15 +156,6 @@ function loadConfig(): Config {
 
 function saveConfig(cfg: Config): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
-}
-
-// ─── CLI args ──────────────────────────────────────────────────────────────
-
-const argv = process.argv.slice(2);
-
-function getArg(flag: string, fallback: string): string {
-  const i = argv.indexOf(flag);
-  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
 }
 
 // ── --init mode ────────────────────────────────────────────────────────────
