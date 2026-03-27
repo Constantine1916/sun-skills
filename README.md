@@ -32,8 +32,7 @@ This repository now supports publishing each `skills/sun-*` directory as an indi
 ClawHub installs skills individually, not as one marketplace bundle. After publishing, users can install specific skills such as:
 
 ```bash
-clawhub install sun-imagine
-clawhub install sun-markdown-to-html
+clawhub install sun-md2xhs
 ```
 
 Publishing to ClawHub releases the published skill under `MIT-0`, per ClawHub's registry rules.
@@ -89,7 +88,53 @@ You can also **Enable auto-update** to get the latest versions automatically.
 
 ## Available Skills
 
-Stay tuned! This repository is under active development.
+### Content Generation Skills
+
+#### sun-md2xhs
+
+Convert Markdown articles into Xiaohongshu (Little Red Book) style long-form image card sequences. Each card features user avatar, blue verified badge, and date — mimicking Xiaohongshu's native post style (white background, PingFang font). Content is precisely cut by height with no blank space.
+
+```bash
+# First-time setup: save name & avatar to ~/.md2xhsrc
+bun ~/.claude/skills/sun-md2xhs/scripts/md2xhs.ts --init \
+  --name "Your Name" \
+  --avatar /path/to/avatar.jpg
+
+# Daily usage: convert MD file to XHS image cards
+bun ~/.claude/skills/sun-md2xhs/scripts/md2xhs.ts ~/article.md --out ~/Desktop/xhs-output/
+```
+
+**Options:**
+
+| Option | Description | Required |
+|--------|-------------|----------|
+| `--init` | Initialize mode, saves config to `~/.md2xhsrc` | First-time only |
+| `--name <name>` | Display name | After init: optional |
+| `--avatar <path>` | Avatar image path | After init: optional |
+| `--out <dir>` | Output directory | No, default `./output` |
+| `--date <date>` | Date string (e.g., `2026年03月25日`) | No, default today |
+| `--width <px>` | Card width in px | No, default `1080` |
+
+**Markdown Support:**
+
+| Element | Rendered As |
+|---------|-------------|
+| `## Heading` / `### Subheading` | Bold title text |
+| `**Bold**` | Bold text |
+| `- List item` | Bulleted list |
+| `> Quote` | Gray text paragraph |
+| `---` divider | Ignored |
+| Emoji | Preserved as-is |
+
+**Output Structure:**
+
+```
+<out-dir>/
+  <filename>-01.png   ← Page 1
+  <filename>-02.png   ← Page 2
+  ...
+  .tmp-html/          ← Intermediate HTML files
+```
 
 ## Environment Configuration
 

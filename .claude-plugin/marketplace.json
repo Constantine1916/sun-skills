@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Skills shared by Sun for improving daily work efficiency",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "plugins": [
     {
@@ -14,7 +14,9 @@
       "description": "Skills for daily work efficiency",
       "source": "./",
       "strict": true,
-      "skills": []
+      "skills": [
+        "./skills/sun-md2xhs"
+      ]
     }
   ]
 }

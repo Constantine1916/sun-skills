@@ -4,6 +4,12 @@ English | 中文
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-27
+
+### Added
+
+- `sun-md2xhs`: Convert Markdown articles to Xiaohongshu-style image cards with avatar, name, and date
+
 ## [0.1.0] - 2026-03-27
 
 ### Added

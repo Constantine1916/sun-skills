@@ -32,8 +32,7 @@ npx skills add sun/sun-skills
 ClawHub 以独立方式安装 skills，而非作为单一 marketplace 包。发布后，用户可以安装特定的 skill，例如：
 
 ```bash
-clawhub install sun-imagine
-clawhub install sun-markdown-to-html
+clawhub install sun-md2xhs
 ```
 
 发布到 ClawHub 会根据 ClawHub 的注册规则，以 `MIT-0` 许可证发布所发布的 skill。
@@ -89,7 +88,53 @@ clawhub install sun-markdown-to-html
 
 ## 可用 Skills
 
-敬请期待！本仓库正在积极开发中。
+### 内容生成技能
+
+#### sun-md2xhs
+
+将 Markdown 文章转换为小红书风格的长文图片卡片序列。每张卡片带有用户自定义头像、蓝 V 认证标志和日期，仿照小红书原生帖子样式（白底、PingFang 字体），精确按内容高度裁切无空白。
+
+```bash
+# 首次使用：保存名称和头像到 ~/.md2xhsrc
+bun ~/.claude/skills/sun-md2xhs/scripts/md2xhs.ts --init \
+  --name "你的名字" \
+  --avatar /path/to/avatar.jpg
+
+# 日常使用：将 MD 文件转换为小红书图片
+bun ~/.claude/skills/sun-md2xhs/scripts/md2xhs.ts ~/article.md --out ~/Desktop/xhs-output/
+```
+
+**参数说明：**
+
+| 参数 | 说明 | 是否必填 |
+|------|------|--------|
+| `--init` | 初始化模式，保存配置到 `~/.md2xhsrc` | 首次使用 |
+| `--name <name>` | 显示名称 | 初始化后可省略 |
+| `--avatar <path>` | 头像图片路径 | 初始化后可省略 |
+| `--out <dir>` | 输出目录 | 否，默认 `./output` |
+| `--date <date>` | 日期字符串（如 `2026年03月25日`） | 否，默认今天 |
+| `--width <px>` | 卡片宽度（px） | 否，默认 `1080` |
+
+**Markdown 支持：**
+
+| 元素 | 渲染效果 |
+|------|---------|
+| `## 标题` / `### 子标题` | 加粗标题字 |
+| `**粗体**` | 加粗 |
+| `- 列表项` | 圆点列表 |
+| `> 引用` | 灰色文字段落 |
+| `---` 分割线 | 忽略（不渲染） |
+| emoji | 原样保留 |
+
+**输出结构：**
+
+```
+<out-dir>/
+  <filename>-01.png   ← 第 1 页
+  <filename>-02.png   ← 第 2 页
+  ...
+  .tmp-html/          ← 中间 HTML 文件
+```
 
 ## 环境配置
 
