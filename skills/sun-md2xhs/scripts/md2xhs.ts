@@ -14,38 +14,41 @@
  *   --name <name>      Display name (overrides config)
  *   --date <date>      Date string (default: today)
  *   --width <px>       Card width in px (default: 1080, height = width * 4/3)
- *   --chrome <path>    Path to Chrome/Chromium (auto-detected if omitted)
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, basename, extname } from "node:path";
 import { spawnSync } from "node:child_process";
-import { platform, homedir } from "node:os";
-import { createInterface } from "node:readline";
-import { Buffer } from "node:buffer";
 
-// ─── CLI args (must be first so they're available everywhere) ──────────────
+// ─── Environment checks ────────────────────────────────────────────────────
 
-const argv = process.argv.slice(2);
-
-function getArg(flag: string, fallback: string): string {
-  const i = argv.indexOf(flag);
-  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
+const CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+if (!existsSync(CHROME_PATH)) {
+  console.error("Error: Google Chrome not found.");
+  console.error(`  Expected: ${CHROME_PATH}`);
+  console.error("  Install from: https://www.google.com/chrome/");
+  process.exit(1);
 }
 
-async function askQuestion(query: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(query, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
+let chromium: import("playwright-core").BrowserType;
+try {
+  ({ chromium } = await import("playwright-core"));
+} catch {
+  console.log("playwright-core not found, installing...");
+  const r = spawnSync("bun", ["add", "playwright-core"], {
+    cwd: import.meta.dir,
+    stdio: "inherit",
   });
+  if (r.status !== 0) {
+    console.error("Failed to install playwright-core. Run manually: bun add playwright-core");
+    process.exit(1);
+  }
+  ({ chromium } = await import("playwright-core"));
 }
 
 // ─── Config file ───────────────────────────────────────────────────────────
 
-const CONFIG_PATH = resolve(homedir(), ".md2xhsrc");
+const CONFIG_PATH = resolve(process.env.HOME || "~", ".md2xhsrc");
 
 interface Config {
   name?: string;
@@ -64,240 +67,56 @@ function saveConfig(cfg: Config): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
 }
 
-// ─── Avatar helpers ────────────────────────────────────────────────────────
+// ─── CLI args ──────────────────────────────────────────────────────────────
 
-async function downloadImage(url: string): Promise<Buffer> {
-  const { default: fetch } = await import("node-fetch");
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to download: ${res.status}`);
-  const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
-}
+const argv = process.argv.slice(2);
 
-function generateDefaultAvatar(name: string): Buffer {
-  // Generate a simple avatar PNG with initials
-  const initials = name.slice(0, 2).toUpperCase();
-  // Use a simple SVG → PNG approach via embedded data
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
-    <rect width="200" height="200" fill="#ff6b6b" rx="100"/>
-    <text x="100" y="115" font-family="Arial,sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">${initials}</text>
-  </svg>`;
-  const b64 = Buffer.from(svg).toString("base64");
-  // Return SVG directly (browser can render it as data URI)
-  return Buffer.from(`data:image/svg+xml;base64,${b64}`);
-}
-
-function isUrl(str: string): boolean {
-  return str.startsWith("http://") || str.startsWith("https://");
+function getArg(flag: string, fallback: string): string {
+  const i = argv.indexOf(flag);
+  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
 }
 
 // ── --init mode ────────────────────────────────────────────────────────────
 if (argv.includes("--init")) {
-  let name = getArg("--name", "");
-  let avatar = getArg("--avatar", "");
-
-  // Interactive prompts if arguments missing
-  if (!name) {
-    name = await askQuestion("请输入显示名称: ");
-  }
-  if (!avatar) {
-    avatar = await askQuestion("请输入头像图片路径（或输入 'default' 生成默认头像）: ");
-  }
-
-  if (!name) {
-    console.error("Error: name is required.");
+  const name = getArg("--name", "");
+  const avatar = getArg("--avatar", "");
+  if (!name || !avatar) {
+    console.error("Usage: bun md2xhs.ts --init --name \"你的名字\" --avatar /path/to/avatar.jpg");
     process.exit(1);
   }
-
-  // Handle avatar: URL, file path, or "default" to generate
-  let avatarValue: string;
-  if (avatar === "default" || !avatar) {
-    // Generate default avatar based on name
-    avatarValue = "default:" + name;
-  } else if (isUrl(avatar)) {
-    avatarValue = avatar; // Store URL
-  } else if (existsSync(resolve(avatar))) {
-    avatarValue = resolve(avatar);
-  } else {
+  if (!existsSync(resolve(avatar))) {
     console.error(`Error: avatar file not found: ${avatar}`);
     process.exit(1);
   }
-
-  saveConfig({ name, avatar: avatarValue });
-  console.log(`\n✓ Config saved to ${CONFIG_PATH}`);
+  saveConfig({ name, avatar: resolve(avatar) });
+  console.log(`✓ Config saved to ${CONFIG_PATH}`);
   console.log(`  name:   ${name}`);
-  console.log(`  avatar: ${avatarValue}`);
+  console.log(`  avatar: ${resolve(avatar)}`);
   process.exit(0);
 }
 
-// ─── Chrome detection (cross-platform) ─────────────────────────────────────
-
-const CHROME_PATHS: Record<string, string[]> = {
-  darwin: [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-  ],
-  linux: [
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/snap/bin/chromium",
-    "/opt/google/chrome/chrome",
-  ],
-  win32: [
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files\\Chromium\\chrome.exe",
-  ],
-};
-
-function detectChrome(customPath?: string): string | null {
-  // 1. User-specified path
-  if (customPath) {
-    if (existsSync(customPath)) return customPath;
-    console.warn(`Warning: specified Chrome not found at ${customPath}`);
-  }
-
-  // 2. Check PATH
-  const pathEnv = process.env.PATH || "";
-  const pathSep = platform() === "win32" ? ";" : ":";
-  for (const dir of pathEnv.split(pathSep)) {
-    if (!dir) continue;
-    const chromeNames = platform() === "win32"
-      ? ["chrome.exe", "chromium.exe"]
-      : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
-    for (const name of chromeNames) {
-      const fullPath = resolve(dir, name);
-      if (existsSync(fullPath)) return fullPath;
-    }
-  }
-
-  // 3. Check common install locations
-  const paths = CHROME_PATHS[platform()] || [];
-  for (const p of paths) {
-    if (existsSync(p)) return p;
-  }
-
-  return null;
-}
-
-function getChromeInstallHelp(): string {
-  const p = platform();
-  if (p === "darwin") {
-    return "Install from: https://www.google.com/chrome/";
-  } else if (p === "linux") {
-    return "Install via:\n  Ubuntu/Debian: sudo apt install chromium-browser or google-chrome-stable\n  Fedora/RHEL: sudo dnf install chromium\n  Arch: sudo pacman -S chromium\n  Or download from: https://www.google.com/chrome/";
-  } else {
-    return "Install from: https://www.google.com/chrome/";
-  }
-}
-
-const chromePath = detectChrome(argv.includes("--chrome") ? getArg("--chrome", "") : undefined);
-
-if (!chromePath) {
-  console.error("Error: Google Chrome / Chromium not found.");
-  console.error(`\nDetected platform: ${platform()}`);
-  console.error(`\n${getChromeInstallHelp()}`);
-  console.error(`\nOr specify path manually: bun md2xhs.ts --chrome /path/to/chrome <input.md>`);
-  process.exit(1);
-}
-
-console.log(`Using Chrome: ${chromePath}`);
-
-// ─── Playwright setup ──────────────────────────────────────────────────────
-
-let chromium: import("playwright-core").BrowserType;
-try {
-  ({ chromium } = await import("playwright-core"));
-} catch {
-  console.log("playwright-core not found, installing...");
-
-  // Find bun executable
-  const bunCmd = process.env.BUN_INSTALL
-    ? resolve(process.env.BUN_INSTALL, "bin", "bun")
-    : (() => {
-        const p = platform() === "win32" ? "bun.exe" : "bun";
-        const p2 = resolve(homedir(), ".bun", "bin", p);
-        return existsSync(p2) ? p2 : p;
-      })();
-
-  const r = spawnSync(bunCmd, ["add", "playwright-core"], {
-    cwd: import.meta.dir,
-    stdio: "inherit",
-  });
-  if (r.status !== 0) {
-    console.error("Failed to install playwright-core. Run manually: bun add playwright-core");
-    process.exit(1);
-  }
-  ({ chromium } = await import("playwright-core"));
-}
-
-// ─── Normal mode ────────────────────────────────────────────────────────────
+// ── Normal mode ────────────────────────────────────────────────────────────
 const config = loadConfig();
 
 const inputFile = argv.find((a) => !a.startsWith("--") && a.endsWith(".md"));
 if (!inputFile) {
-  console.error("Usage: bun md2xhs.ts <input.md> [--out <dir>] [--avatar <path>] [--name <name>] [--date <date>] [--width <px>] [--chrome <path>]");
+  console.error("Usage: bun md2xhs.ts <input.md> [--out <dir>] [--avatar <path>] [--name <name>] [--date <date>] [--width <px>]");
   console.error("First time? Run: bun md2xhs.ts --init --name \"你的名字\" --avatar /path/to/avatar.jpg");
   process.exit(1);
 }
 
 const inputPath = resolve(inputFile);
 const outDir = resolve(getArg("--out", "./output"));
-let avatarPath = getArg("--avatar", config.avatar || "");
-let displayName = getArg("--name", config.name || "");
+const avatarPath = getArg("--avatar", config.avatar || "");
+const displayName = getArg("--name", config.name || "");
 
-// For non-interactive/agent mode: require explicit args if config missing
-if (!displayName || !avatarPath) {
-  // In script mode (not --init), if name/avatar not provided and no config, show clear error
-  if (!displayName) {
-    console.error("\nError: --name is required (or run --init to save config).");
-    console.error("Example: bun md2xhs.ts article.md --name \"Your Name\" --avatar /path/to/avatar.jpg");
-    process.exit(1);
-  }
-  if (!avatarPath) {
-    console.error("\nError: --avatar is required (or run --init to save config).");
-    console.error("Example: bun md2xhs.ts article.md --name \"Your Name\" --avatar /path/to/avatar.jpg");
-    console.error("Tip: Use --avatar default to generate a default avatar from your name.");
-    process.exit(1);
-  }
-}
-
-// Resolve avatar path (support URL, "default", or "default:name" for generated avatars)
-let avatarDataUrl = "";
-if (avatarPath === "default") {
-  const initials = displayName.slice(0, 2).toUpperCase();
-  avatarDataUrl = `data:image/svg+xml;base64,${Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
-      <rect width="200" height="200" fill="#ff6b6b" rx="100"/>
-      <text x="100" y="115" font-family="Arial,sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">${initials}</text>
-    </svg>`
-  ).toString("base64")}`;
-} else if (isUrl(avatarPath)) {
-  console.log(`Downloading avatar from: ${avatarPath}`);
-  try {
-    const imgBuffer = await downloadImage(avatarPath);
-    // Detect mime type from URL extension
-    const urlExt = extname(avatarPath).slice(1).toLowerCase() || "png";
-    const mime = urlExt === "jpg" || urlExt === "jpeg" ? "image/jpeg" : `image/${urlExt}`;
-    avatarDataUrl = `data:${mime};base64,${imgBuffer.toString("base64")}`;
-  } catch (e) {
-    console.error(`Failed to download avatar: ${e}`);
-    process.exit(1);
-  }
-} else if (existsSync(resolve(avatarPath))) {
-  avatarDataUrl = avatarToBase64(resolve(avatarPath));
-} else {
-  console.error(`Error: avatar file not found: ${avatarPath}`);
+if (!displayName) {
+  console.error("Error: --name is required (or run --init to save it once).");
   process.exit(1);
 }
-
-// Save config if first time (for reusability)
-if (!config.name && !config.avatar) {
-  saveConfig({ name: displayName, avatar: avatarPath });
-  console.log(`✓ Config saved to ${CONFIG_PATH}`);
+if (!avatarPath) {
+  console.error("Error: --avatar is required (or run --init to save it once).");
+  process.exit(1);
 }
 
 const cardWidth = parseInt(getArg("--width", "1080"), 10);
@@ -383,6 +202,8 @@ function avatarToBase64(path: string): string {
   }
 }
 
+const avatarDataUrl = avatarToBase64(avatarPath);
+
 // ─── Block → inner HTML ────────────────────────────────────────────────────
 
 const CARD_PAD = 48;  // horizontal & top padding
@@ -416,7 +237,7 @@ function cardCss(fixedHeight?: number, isLastPage?: boolean): string {
   body {
     width: ${cardWidth}px;
     background: #ffffff;
-    font-family: "Noto Sans CJK SC", "Noto Sans CJK TC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     color: #1a1a1a;
   }
   .card {
@@ -458,6 +279,8 @@ function generateMeasureHtml(blocks: Block[]): string {
     ? `<img class="avatar" src="${avatarDataUrl}" />`
     : `<div class="avatar" style="background:#eee;"></div>`;
 
+  // Each block in its own wrapper; since each .block is the only child of its wrapper,
+  // :last-child applies → margin-bottom: 0. We measure pure content height, add BLOCK_GAP separately.
   const blocksHtml = blocks.map((b, i) =>
     `<div id="b${i}" style="width:${CONTENT_WIDTH}px;">${blockToInnerHtml(b)}</div>`
   ).join("\n");
@@ -469,6 +292,7 @@ ${cardCss()}
 </style>
 </head>
 <body>
+<!-- Empty card: measures chrome (header + footer + padding) -->
 <div class="card" id="chrome-card">
   <div class="header">
     ${avatarHtml}
@@ -485,6 +309,7 @@ ${cardCss()}
   </div>
   <div class="content" style="flex:0;height:0;"></div>
 </div>
+<!-- Blocks for individual height measurement -->
 <div id="measure-blocks" style="padding:0;">
 ${blocksHtml}
 </div>
@@ -568,7 +393,7 @@ mkdirSync(tmpDir, { recursive: true });
 const slugBase = basename(inputPath, extname(inputPath));
 
 const browser = await chromium.launch({
-  executablePath: chromePath,
+  executablePath: CHROME_PATH,
   headless: true,
   args: ["--no-sandbox", "--disable-setuid-sandbox"],
 });
