@@ -1,0 +1,20 @@
+{
+  "name": "sun-skills",
+  "owner": {
+    "name": "Sun",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Skills shared by Sun for improving daily work efficiency",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "sun-skills",
+      "description": "Skills for daily work efficiency",
+      "source": "./",
+      "strict": true,
+      "skills": []
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@sun-skills/scripts",
+  "version": "0.1.0",
+  "description": "Shared scripts for sun-skills",
+  "type": "module",
+  "main": "index.js"
+}
