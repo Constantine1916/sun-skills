@@ -1,0 +1,8 @@
+{
+  "name": "sun-md2xhs-scripts",
+  "version": "1.0.0",
+  "description": "Dependencies for md2xhs",
+  "dependencies": {
+    "playwright-core": "^1.58.2"
+  }
+}

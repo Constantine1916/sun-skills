@@ -22,6 +22,55 @@ import { resolve, basename, extname } from "node:path";
 import { spawnSync } from "node:child_process";
 import { platform, homedir } from "node:os";
 
+// ─── CLI args (must be first so they're available everywhere) ──────────────
+
+const argv = process.argv.slice(2);
+
+function getArg(flag: string, fallback: string): string {
+  const i = argv.indexOf(flag);
+  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
+}
+
+// ─── Config file ───────────────────────────────────────────────────────────
+
+const CONFIG_PATH = resolve(homedir(), ".md2xhsrc");
+
+interface Config {
+  name?: string;
+  avatar?: string;
+}
+
+function loadConfig(): Config {
+  try {
+    return JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveConfig(cfg: Config): void {
+  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
+}
+
+// ── --init mode ────────────────────────────────────────────────────────────
+if (argv.includes("--init")) {
+  const name = getArg("--name", "");
+  const avatar = getArg("--avatar", "");
+  if (!name || !avatar) {
+    console.error("Usage: bun md2xhs.ts --init --name \"你的名字\" --avatar /path/to/avatar.jpg");
+    process.exit(1);
+  }
+  if (!existsSync(resolve(avatar))) {
+    console.error(`Error: avatar file not found: ${avatar}`);
+    process.exit(1);
+  }
+  saveConfig({ name, avatar: resolve(avatar) });
+  console.log(`✓ Config saved to ${CONFIG_PATH}`);
+  console.log(`  name:   ${name}`);
+  console.log(`  avatar: ${resolve(avatar)}`);
+  process.exit(0);
+}
+
 // ─── Chrome detection (cross-platform) ─────────────────────────────────────
 
 const CHROME_PATHS: Record<string, string[]> = {
@@ -86,8 +135,6 @@ function getChromeInstallHelp(): string {
   }
 }
 
-// ─── Chrome executable ─────────────────────────────────────────────────────
-
 const chromePath = detectChrome(argv.includes("--chrome") ? getArg("--chrome", "") : undefined);
 
 if (!chromePath) {
@@ -128,56 +175,7 @@ try {
   ({ chromium } = await import("playwright-core"));
 }
 
-// ─── Config file ───────────────────────────────────────────────────────────
-
-const CONFIG_PATH = resolve(homedir(), ".md2xhsrc");
-
-interface Config {
-  name?: string;
-  avatar?: string;
-}
-
-function loadConfig(): Config {
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-function saveConfig(cfg: Config): void {
-  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
-}
-
-// ─── CLI args ──────────────────────────────────────────────────────────────
-
-const argv = process.argv.slice(2);
-
-function getArg(flag: string, fallback: string): string {
-  const i = argv.indexOf(flag);
-  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
-}
-
-// ── --init mode ────────────────────────────────────────────────────────────
-if (argv.includes("--init")) {
-  const name = getArg("--name", "");
-  const avatar = getArg("--avatar", "");
-  if (!name || !avatar) {
-    console.error("Usage: bun md2xhs.ts --init --name \"你的名字\" --avatar /path/to/avatar.jpg");
-    process.exit(1);
-  }
-  if (!existsSync(resolve(avatar))) {
-    console.error(`Error: avatar file not found: ${avatar}`);
-    process.exit(1);
-  }
-  saveConfig({ name, avatar: resolve(avatar) });
-  console.log(`✓ Config saved to ${CONFIG_PATH}`);
-  console.log(`  name:   ${name}`);
-  console.log(`  avatar: ${resolve(avatar)}`);
-  process.exit(0);
-}
-
-// ── Normal mode ────────────────────────────────────────────────────────────
+// ─── Normal mode ────────────────────────────────────────────────────────────
 const config = loadConfig();
 
 const inputFile = argv.find((a) => !a.startsWith("--") && a.endsWith(".md"));
