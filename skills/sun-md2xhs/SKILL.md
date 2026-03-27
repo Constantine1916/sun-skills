@@ -1,6 +1,6 @@
 ---
 name: sun-md2xhs
-description: 将 Markdown 文章转换为小红书长文图片卡片序列。每张图片带有用户自定义头像、蓝 V 认证标志和日期，仿照小红书原生帖子样式（白底、PingFang 字体），精确按内容高度裁切无空白。当用户说"转成小红书图片"、"生成长文卡片"、"把这篇文章转图片"、"md转小红书"、"生成小红书长文图"时触发此 skill。
+description: 将 Markdown 文章转换为小红书长文图片卡片序列。每张图片带有用户自定义头像、蓝 V 认证标志和日期，仿照小红书原生帖子样式（白底、PingFang 字体），精确按内容高度裁切无空白。支持 macOS/Linux/Windows 多平台，自动检测 Chrome/Chromium。当用户说"转成小红书图片"、"生成长文卡片"、"把这篇文章转图片"、"md转小红书"、"生成小红书长文图"时触发此 skill。
 ---
 
 # sun-md2xhs
@@ -48,21 +48,44 @@ bun ~/.claude/skills/sun-md2xhs/scripts/md2xhs.ts ~/Downloads/article.md \
 | `--out <dir>` | 输出目录 | 否，默认 `./output` |
 | `--date <date>` | 日期字符串（如 `2026年03月25日`） | 否，默认今天 |
 | `--width <px>` | 卡片宽度（px） | 否，默认 `1080` |
+| `--chrome <path>` | 指定 Chrome/Chromium 路径 | 否，自动检测 |
+
+## 多平台支持
+
+脚本自动检测以下位置的 Chrome/Chromium：
+
+| 平台 | 检测路径 |
+|------|---------|
+| macOS | `/Applications/Google Chrome.app/...`, Chromium, Chrome Canary |
+| Linux | `/usr/bin/google-chrome`, `/usr/bin/chromium`, `/snap/bin/chromium` |
+| Windows | `C:\Program Files\Google\Chrome\Application\chrome.exe` |
+
+同时会扫描 PATH 环境变量中的 `google-chrome`、`chromium`、`chrome.exe` 等命令。
+
+如需手动指定：
+```bash
+bun md2xhs.ts article.md --chrome /usr/bin/chromium
+```
 
 ## 依赖检查
 
-依赖系统 Chrome：`/Applications/Google Chrome.app`（仅支持 macOS）。
+自动安装 `playwright-core`。首次运行时会提示安装。
 
-`playwright-core` 首次运行时若未安装，脚本会自动通过 `bun add` 安装。
+需要系统安装 Chrome/Chromium：
+- macOS: [下载 Chrome](https://www.google.com/chrome/)
+- Ubuntu/Debian: `sudo apt install chromium-browser`
+- Fedora: `sudo dnf install chromium`
+- Arch: `sudo pacman -S chromium`
+- Windows: [下载 Chrome](https://www.google.com/chrome/)
 
 ## 输出结构
 
 ```
 <out-dir>/
-  <文件名>-01.png   ← 第 1 页
-  <文件名>-02.png   ← 第 2 页
+  <filename>-01.png   ← 第 1 页
+  <filename>-02.png   ← 第 2 页
   ...
-  .tmp-html/        ← 中间 HTML 文件（可忽略）
+  .tmp-html/          ← 中间 HTML 文件（可忽略）
 ```
 
 ## Markdown 支持
