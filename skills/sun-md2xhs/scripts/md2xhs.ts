@@ -343,7 +343,7 @@ function cardCss(fixedHeight?: number, isLastPage?: boolean): string {
   .name { font-size: 40px; font-weight: 600; color: #1a1a1a; line-height: 1.2; }
   .verified { width: 36px; height: 36px; flex-shrink: 0; }
   .date { font-size: 32px; color: #999; line-height: 1.2; }
-  .content { flex: 1; color: #1a1a1a; font-size: 36px; ${!isLastPage ? "display: flex; flex-direction: column; justify-content: space-between;" : ""} }
+  .content { flex: 1; color: #1a1a1a; font-size: 36px; display: flex; flex-direction: column; ${!isLastPage ? "justify-content: space-between;" : `gap: ${BLOCK_GAP}px;`} }
   .block { margin-bottom: 0; }
   .para { font-size: 36px; line-height: 1.8; }
   .heading { line-height: 1.5; }
