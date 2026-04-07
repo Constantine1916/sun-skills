@@ -14,119 +14,28 @@
  *   --name <name>      Display name (overrides config)
  *   --date <date>      Date string (default: today)
  *   --width <px>       Card width in px (default: 1080, height = width * 4/3)
- *   --chrome <path>    Path to Chrome/Chromium (auto-detected if omitted)
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, basename, extname } from "node:path";
 import { spawnSync } from "node:child_process";
-import { platform, homedir } from "node:os";
 
-// ─── Chrome detection (cross-platform) ─────────────────────────────────────
+// ─── Environment checks ────────────────────────────────────────────────────
 
-const CHROME_PATHS: Record<string, string[]> = {
-  darwin: [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-  ],
-  linux: [
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/snap/bin/chromium",
-    "/opt/google/chrome/chrome",
-  ],
-  win32: [
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files\\Chromium\\chrome.exe",
-  ],
-};
-
-function detectChrome(customPath?: string): string | null {
-  // 1. User-specified path
-  if (customPath) {
-    if (existsSync(customPath)) return customPath;
-    console.warn(`Warning: specified Chrome not found at ${customPath}`);
-  }
-
-  // 2. Check PATH
-  const pathEnv = process.env.PATH || "";
-  const pathSep = platform() === "win32" ? ";" : ":";
-  for (const dir of pathEnv.split(pathSep)) {
-    if (!dir) continue;
-    const chromeNames = platform() === "win32"
-      ? ["chrome.exe", "chromium.exe"]
-      : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
-    for (const name of chromeNames) {
-      const fullPath = resolve(dir, name);
-      if (existsSync(fullPath)) return fullPath;
-    }
-  }
-
-  // 3. Check common install locations
-  const paths = CHROME_PATHS[platform()] || [];
-  for (const p of paths) {
-    if (existsSync(p)) return p;
-  }
-
-  return null;
-}
-
-function getChromeInstallHelp(): string {
-  const p = platform();
-  if (p === "darwin") {
-    return "Install from: https://www.google.com/chrome/";
-  } else if (p === "linux") {
-    return "Install via:\n  Ubuntu/Debian: sudo apt install chromium-browser or google-chrome-stable\n  Fedora/RHEL: sudo dnf install chromium\n  Arch: sudo pacman -S chromium\n  Or download from: https://www.google.com/chrome/";
-  } else {
-    return "Install from: https://www.google.com/chrome/";
-  }
-}
-
-// ─── CLI args ──────────────────────────────────────────────────────────────
-
-const argv = process.argv.slice(2);
-
-function getArg(flag: string, fallback: string): string {
-  const i = argv.indexOf(flag);
-  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
-}
-
-// ─── Chrome executable ─────────────────────────────────────────────────────
-
-const chromePath = detectChrome(argv.includes("--chrome") ? getArg("--chrome", "") : undefined);
-
-if (!chromePath) {
-  console.error("Error: Google Chrome / Chromium not found.");
-  console.error(`\nDetected platform: ${platform()}`);
-  console.error(`\n${getChromeInstallHelp()}`);
-  console.error(`\nOr specify path manually: bun md2xhs.ts --chrome /path/to/chrome <input.md>`);
+const CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+if (!existsSync(CHROME_PATH)) {
+  console.error("Error: Google Chrome not found.");
+  console.error(`  Expected: ${CHROME_PATH}`);
+  console.error("  Install from: https://www.google.com/chrome/");
   process.exit(1);
 }
-
-console.log(`Using Chrome: ${chromePath}`);
-
-// ─── Playwright setup ──────────────────────────────────────────────────────
 
 let chromium: import("playwright-core").BrowserType;
 try {
   ({ chromium } = await import("playwright-core"));
 } catch {
   console.log("playwright-core not found, installing...");
-
-  // Find bun executable
-  const bunCmd = process.env.BUN_INSTALL
-    ? resolve(process.env.BUN_INSTALL, "bin", "bun")
-    : (() => {
-        const p = platform() === "win32" ? "bun.exe" : "bun";
-        const p2 = resolve(homedir(), ".bun", "bin", p);
-        return existsSync(p2) ? p2 : p;
-      })();
-
-  const r = spawnSync(bunCmd, ["add", "playwright-core"], {
+  const r = spawnSync("bun", ["add", "playwright-core"], {
     cwd: import.meta.dir,
     stdio: "inherit",
   });
@@ -139,7 +48,7 @@ try {
 
 // ─── Config file ───────────────────────────────────────────────────────────
 
-const CONFIG_PATH = resolve(homedir(), ".md2xhsrc");
+const CONFIG_PATH = resolve(process.env.HOME || "~", ".md2xhsrc");
 
 interface Config {
   name?: string;
@@ -156,6 +65,15 @@ function loadConfig(): Config {
 
 function saveConfig(cfg: Config): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
+}
+
+// ─── CLI args ──────────────────────────────────────────────────────────────
+
+const argv = process.argv.slice(2);
+
+function getArg(flag: string, fallback: string): string {
+  const i = argv.indexOf(flag);
+  return i !== -1 && argv[i + 1] ? argv[i + 1]! : fallback;
 }
 
 // ── --init mode ────────────────────────────────────────────────────────────
@@ -182,7 +100,7 @@ const config = loadConfig();
 
 const inputFile = argv.find((a) => !a.startsWith("--") && a.endsWith(".md"));
 if (!inputFile) {
-  console.error("Usage: bun md2xhs.ts <input.md> [--out <dir>] [--avatar <path>] [--name <name>] [--date <date>] [--width <px>] [--chrome <path>]");
+  console.error("Usage: bun md2xhs.ts <input.md> [--out <dir>] [--avatar <path>] [--name <name>] [--date <date>] [--width <px>]");
   console.error("First time? Run: bun md2xhs.ts --init --name \"你的名字\" --avatar /path/to/avatar.jpg");
   process.exit(1);
 }
@@ -361,6 +279,8 @@ function generateMeasureHtml(blocks: Block[]): string {
     ? `<img class="avatar" src="${avatarDataUrl}" />`
     : `<div class="avatar" style="background:#eee;"></div>`;
 
+  // Each block in its own wrapper; since each .block is the only child of its wrapper,
+  // :last-child applies → margin-bottom: 0. We measure pure content height, add BLOCK_GAP separately.
   const blocksHtml = blocks.map((b, i) =>
     `<div id="b${i}" style="width:${CONTENT_WIDTH}px;">${blockToInnerHtml(b)}</div>`
   ).join("\n");
@@ -372,6 +292,7 @@ ${cardCss()}
 </style>
 </head>
 <body>
+<!-- Empty card: measures chrome (header + footer + padding) -->
 <div class="card" id="chrome-card">
   <div class="header">
     ${avatarHtml}
@@ -388,6 +309,7 @@ ${cardCss()}
   </div>
   <div class="content" style="flex:0;height:0;"></div>
 </div>
+<!-- Blocks for individual height measurement -->
 <div id="measure-blocks" style="padding:0;">
 ${blocksHtml}
 </div>
@@ -471,7 +393,7 @@ mkdirSync(tmpDir, { recursive: true });
 const slugBase = basename(inputPath, extname(inputPath));
 
 const browser = await chromium.launch({
-  executablePath: chromePath,
+  executablePath: CHROME_PATH,
   headless: true,
   args: ["--no-sandbox", "--disable-setuid-sandbox"],
 });
