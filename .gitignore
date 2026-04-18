@@ -25,6 +25,7 @@ lerna-debug.log*
 # Coverage
 coverage/
 .nyc_output/
+tests/
 
 # Temporary files
 *.tmp
