@@ -136,6 +136,39 @@ bun ~/.claude/skills/sun-md2xhs/scripts/md2xhs.ts ~/article.md --out ~/Desktop/x
   .tmp-html/          ← Intermediate HTML files
 ```
 
+### Report Generation Skills
+
+#### sun-report
+
+Generate developer daily or weekly reports from account-level remote commits on GitHub, GitLab, or both. The skill summarizes pushed work into module-level output instead of listing raw commits.
+
+**Installation:**
+
+Install the `sun-skills` marketplace/plugin using the instructions above. `sun-report` is included once the repository is installed.
+
+**Usage in Claude Code / Codex:**
+
+```text
+$sun-report 帮我写一个日报
+$sun-report 帮我写一个周报
+```
+
+The skill will:
+
+- Ask whether your work is on GitHub, GitLab, or both
+- Check `gh` / `glab` login status before collecting data
+- Support self-hosted GitLab instances by hostname
+- Only count commits that have already been pushed to the remote platform
+- Use Beijing time for daily and weekly windows
+
+**Direct script usage:**
+
+```bash
+python3 ~/.codex/skills/sun-report/scripts/sun_report.py \
+  --report-type weekly \
+  --providers github
+```
+
 ## Environment Configuration
 
 Some skills require API keys or custom configuration. Environment variables can be set in `.env` files:
