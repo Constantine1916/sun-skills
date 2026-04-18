@@ -33,6 +33,7 @@ ClawHub installs skills individually, not as one marketplace bundle. After publi
 
 ```bash
 clawhub install sun-md2xhs
+clawhub install sun-report
 ```
 
 Publishing to ClawHub releases the published skill under `MIT-0`, per ClawHub's registry rules.
@@ -146,11 +147,25 @@ Generate developer daily or weekly reports from account-level remote commits on 
 
 Install the `sun-skills` marketplace/plugin using the instructions above. `sun-report` is included once the repository is installed.
 
+**Prerequisites:**
+
+- GitHub usage requires `gh`
+- GitLab usage requires `glab`
+- Self-hosted GitLab is supported by passing the instance hostname
+
 **Usage in Claude Code / Codex:**
 
 ```text
 $sun-report 帮我写一个日报
 $sun-report 帮我写一个周报
+```
+
+Example prompts:
+
+```text
+$sun-report 帮我按 GitHub 提交写一个日报
+$sun-report 帮我按 GitHub 提交写一个周报
+$sun-report 帮我按 GitLab 提交写一个周报
 ```
 
 The skill will:
@@ -167,6 +182,13 @@ The skill will:
 python3 ~/.codex/skills/sun-report/scripts/sun_report.py \
   --report-type weekly \
   --providers github
+```
+
+```bash
+python3 ~/.codex/skills/sun-report/scripts/sun_report.py \
+  --report-type weekly \
+  --providers gitlab \
+  --gitlab-host gitlab.company.com
 ```
 
 ## Environment Configuration
