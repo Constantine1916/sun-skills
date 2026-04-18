@@ -31,6 +31,8 @@ coverage/
 *.temp
 .cache/
 .parcel-cache/
+__pycache__/
+*.py[cod]
 
 # OS files
 .DS_Store
