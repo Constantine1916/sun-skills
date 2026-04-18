@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sun Report"
+  short_description: "Generate daily and weekly commit reports"
+  default_prompt: "Use $sun-report to generate a daily or weekly commit report from GitHub, GitLab, or both."
