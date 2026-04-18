@@ -203,7 +203,3 @@ python3 ~/.codex/skills/sun-report/scripts/sun_report.py \
 ## 免责声明
 
 本项目按"原样"提供，供个人和教育使用。
-
-## 致谢
-
-本项目灵感来自 [baoyu-skills](https://github.com/JimLiu/baoyu-skills)。

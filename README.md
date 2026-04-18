@@ -203,7 +203,3 @@ Some skills require API keys or custom configuration. Environment variables can 
 ## Disclaimer
 
 This project is provided as-is for personal and educational use.
-
-## Credits
-
-This project was inspired by [baoyu-skills](https://github.com/JimLiu/baoyu-skills).
